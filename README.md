@@ -1,6 +1,8 @@
 # mingpao_edu_jobs
 A helpful python script to crawl all education jobs posted on mingpao website into a single html file.
 
+![ScreenShot](screenshot/screen1.png)
+
 
 # Usage
 ```
