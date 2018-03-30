@@ -157,6 +157,7 @@ class MyHTMLParser(BaseHTMLParser):
     STATE_FOUND_COMPANY = 9
     STATE_FIND_DATE = 10
     STATE_FOUND_DATE = 11
+    STATE_END = -1
 
     state = STATE_START
 
@@ -164,6 +165,8 @@ class MyHTMLParser(BaseHTMLParser):
     position = None
     company = None
     date = None
+
+    same_date = None
 
     def handle_starttag(self, tag, attrs):
         # print "Encountered a start tag:", tag
@@ -180,15 +183,18 @@ class MyHTMLParser(BaseHTMLParser):
                 self.state = self.STATE_FIND_NEXT_JOB_ENTERED
 
         elif self.STATE_FIND_NEXT_JOB_ENTERED == self.state:
-            if tag == 'div' and self.hasAttr('class', attrs):
+            if self.checkInTag('div', 'class', 'thum50percent color_position', tag, attrs):
                 self.state = self.STATE_FOUND_POSITION
+                print 'found position'
 
         elif self.STATE_FIND_COMPANY == self.state:
-            if tag == 'div' and self.hasAttr('class', attrs):
+            # if tag == 'div' and self.hasAttr('class', attrs):
+            if self.checkInTag('div', 'class', 'thum37percent', tag, attrs):
                 self.state = self.STATE_FOUND_COMPANY
 
         elif self.STATE_FIND_DATE == self.state:
-            if tag == 'div' and self.hasAttr('class', attrs):
+            # if tag == 'div' and self.hasAttr('class', attrs):
+            if self.checkInTag('div', 'class', 'thum13percent', tag, attrs):
                 self.state = self.STATE_FOUND_DATE
 
 
@@ -225,18 +231,25 @@ class MyHTMLParser(BaseHTMLParser):
                 #print data
                 self.date = data
 
-                # add a job
-                # print 'add a job ' + self.position
-                self.job_ad_list.append(JobAd(
-                    self.jobid,
-                    self.position,
-                    self.company,
-                    self.date
-                    ))
-                self.state = self.STATE_FIND_NEXT_JOB_ENTERED
-                pass
+                if self.same_date is not None and self.same_date != self.date:
+                    self.state = self.STATE_END
+                    print 'end same date at ' + data + self.jobid
+                    raise EOFError()
+                else:
+                    if self.same_date is None:
+                        self.same_date = self.date
+                        print 'set same date ' + self.same_date
 
-
+                    # add a job of the same date
+                    # print 'add a job ' + self.position
+                    self.job_ad_list.append(JobAd(
+                        self.jobid,
+                        self.position,
+                        self.company,
+                        self.date
+                        ))
+                    self.state = self.STATE_FIND_NEXT_JOB_ENTERED
+                    pass
 
         pass
 
@@ -320,6 +333,14 @@ def fetch_job_detail(url):
     parser.feed(html)
     return parser.get_content()
 
+def highlight(label, keyword_list):
+    for keyword in keyword_list:
+        pattern = re.compile(re.escape(keyword), re.IGNORECASE)
+        label = pattern.sub('<span class="highlight">%s</span>' % keyword, label)
+        if keyword in label:
+            label = label.replace(keyword, '<span class="highlight">%s</span>' % keyword)
+    return label
+
 if __name__ == '__main__':
     job_ad_list = []
 
@@ -327,12 +348,15 @@ if __name__ == '__main__':
     while True:
         #print 'fetching page_no ', page_no
 
-        result = fetch_mingpao(page_no)
-        # print len(result)
-        if len(result) == 0:
+        try:
+            result = fetch_mingpao(page_no)
+            # print len(result)
+            if len(result) == 0:
+                break
+            job_ad_list.extend(result)
+            page_no += 1
+        except EOFError:
             break
-        job_ad_list.extend(result)
-        page_no += 1
 
     # fetch job details
     for job_ad in job_ad_list:
@@ -354,7 +378,7 @@ if __name__ == '__main__':
 
     format = '''
     <section class="card">
-    <h1>{company}</p>
+    <h1>{count}/{total} {company}</p>
     <h2><a href=\"{position_url}\">{position_label}</a></h2>
     <div>{content}</div>
     </section>
@@ -364,19 +388,29 @@ if __name__ == '__main__':
     print format.format(company=u'\u6700\u5f8c\u66f4\u65b0'.encode('utf-8', 'ignore'),
                             position_url='',
                             position_label=now.strftime("%Y-%m-%d %H:%M").encode('utf-8', 'ignore'),
-                            content='')
+                            content='',
+                            count='',
+                            total='')
 
     # print keyword card
     print format.format(company=u'\u95dc\u9375\u5b57\u6b21\u5e8f'.encode('utf-8', 'ignore'),
                             position_url='',
                             position_label=' > '.join(keyword_list),
-                            content='')
+                            content='',
+                            count='',
+                            total=''
+                            )
 
+    total = len(job_ad_list)
+    count = 0
     for job_ad in job_ad_list:
-        print format.format(company=job_ad.get_company(),
+        count += 1
+        print format.format(company=highlight(job_ad.get_company(), company_keyword_list),
                             position_url=job_ad.get_url(),
-                            position_label=job_ad.get_position(),
-                            content=job_ad.get_content())
+                            position_label=highlight(job_ad.get_position(), keyword_list),
+                            content=highlight(job_ad.get_content(), keyword_list),
+                            count=count,
+                            total=total)
 
     print '''
     </body>
