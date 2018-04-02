@@ -2,6 +2,8 @@ import datetime
 import urllib2
 from HTMLParser import HTMLParser
 import re
+import os
+import time
 
 __author__ = 'warenix'
 
@@ -185,7 +187,6 @@ class MyHTMLParser(BaseHTMLParser):
         elif self.STATE_FIND_NEXT_JOB_ENTERED == self.state:
             if self.checkInTag('div', 'class', 'thum50percent color_position', tag, attrs):
                 self.state = self.STATE_FOUND_POSITION
-                print 'found position'
 
         elif self.STATE_FIND_COMPANY == self.state:
             # if tag == 'div' and self.hasAttr('class', attrs):
@@ -233,7 +234,7 @@ class MyHTMLParser(BaseHTMLParser):
 
                 if self.same_date is not None and self.same_date != self.date:
                     self.state = self.STATE_END
-                    print 'end same date at ' + data + self.jobid
+                    print 'end same date at ' + data
                     raise EOFError()
                 else:
                     if self.same_date is None:
@@ -341,12 +342,19 @@ def highlight(label, keyword_list):
             label = label.replace(keyword, '<span class="highlight">%s</span>' % keyword)
     return label
 
-if __name__ == '__main__':
+def gen_daily_job():
+    now = datetime.datetime.now()
+    filename = now.strftime("%Y%m%d") + ".html"
+    daily_job_html = "static/" + filename
+    file = open(daily_job_html, "w+")
+
+    print "Start generating output html: " + daily_job_html
+
     job_ad_list = []
 
     page_no = 1
     while True:
-        #print 'fetching page_no ', page_no
+        print 'fetching mingpao page_no ', page_no
 
         try:
             result = fetch_mingpao(page_no)
@@ -359,15 +367,19 @@ if __name__ == '__main__':
             break
 
     # fetch job details
+    total = len(job_ad_list)
+    count = 0    
     for job_ad in job_ad_list:
-        content = fetch_job_detail(job_ad.get_url())
+        count += 1
+        print 'fetching job detail ' + (str(count) + "/" + str(total))
+        content = fetch_job_detail(job_ad.get_url())        
         job_ad.content = content
         pass
     # exit()
 
     job_ad_list.sort(cmp=getKey, reverse=True)
 
-    print '''
+    file.write('''
     <html>
     <head>
     <meta charset="UTF-8" />
@@ -375,44 +387,71 @@ if __name__ == '__main__':
     </head>
     <body>
     '''
+    )
 
     format = '''
     <section class="card">
-    <h1>{count}/{total} {company}</p>
+    <h1>#{count}/{total} {company}</p>
     <h2><a href=\"{position_url}\">{position_label}</a></h2>
+    <h3>{date}</h3>
     <div>{content}</div>
     </section>
     '''
     # print gen dat
     now = datetime.datetime.now()
-    print format.format(company=u'\u6700\u5f8c\u66f4\u65b0'.encode('utf-8', 'ignore'),
+    file.write( format.format(company=u'\u6700\u5f8c\u66f4\u65b0'.encode('utf-8', 'ignore'),
                             position_url='',
                             position_label=now.strftime("%Y-%m-%d %H:%M").encode('utf-8', 'ignore'),
+                            date='',
                             content='',
                             count='',
                             total='')
+    )
 
     # print keyword card
-    print format.format(company=u'\u95dc\u9375\u5b57\u6b21\u5e8f'.encode('utf-8', 'ignore'),
+    file.write( format.format(company=u'\u95dc\u9375\u5b57\u6b21\u5e8f'.encode('utf-8', 'ignore'),
                             position_url='',
                             position_label=' > '.join(keyword_list),
                             content='',
+                            date='',
                             count='',
                             total=''
                             )
+    )
 
     total = len(job_ad_list)
     count = 0
     for job_ad in job_ad_list:
         count += 1
-        print format.format(company=highlight(job_ad.get_company(), company_keyword_list),
+        file.write( format.format(company=highlight(job_ad.get_company(), company_keyword_list),
                             position_url=job_ad.get_url(),
                             position_label=highlight(job_ad.get_position(), keyword_list),
                             content=highlight(job_ad.get_content(), keyword_list),
+                            date=job_ad.get_date(),
                             count=count,
                             total=total)
+        )
 
-    print '''
+    file.write( '''
     </body>
     </html>
-        '''
+    '''
+    )
+
+    file.close() 
+
+    index_html = "static/index.html"
+    if os.path.isfile(index_html):
+        os.remove(index_html)
+    os.symlink(filename, index_html)
+
+    print "create symlink static/index.html done"
+
+
+
+if __name__ == '__main__':
+    one_hour_in_sec = 60 * 60
+
+    while True:
+        gen_daily_job()
+        time.sleep(one_hour_in_sec)
