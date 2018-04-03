@@ -169,6 +169,7 @@ class MyHTMLParser(BaseHTMLParser):
     date = None
 
     same_date = None
+    end = False
 
     def handle_starttag(self, tag, attrs):
         # print "Encountered a start tag:", tag
