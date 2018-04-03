@@ -5,8 +5,19 @@ A helpful python script to crawl all education jobs posted on mingpao website in
 
 
 # Usage
+Crawl and generate a new daily html every hour
+```sh
+python crawl.py
 ```
-python crawl.py > a.html; firefox a.html
+
+# Output
+```
+static/index.html -> static/<yyyymmdd>.html
+```
+
+Start a web server on port 8080 to serve *static/index.html*
+```sh
+python app.py
 ```
 
 
