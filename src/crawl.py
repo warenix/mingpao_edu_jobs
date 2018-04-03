@@ -234,15 +234,16 @@ class MyHTMLParser(BaseHTMLParser):
 
                 if self.same_date is not None and self.same_date != self.date:
                     self.state = self.STATE_END
+                    self.end = True;
                     print 'end same date at ' + data
-                    raise EOFError()
+                    # raise EOFError()
                 else:
                     if self.same_date is None:
                         self.same_date = self.date
                         print 'set same date ' + self.same_date
 
                     # add a job of the same date
-                    # print 'add a job ' + self.position
+                    print 'add a job ' + self.position
                     self.job_ad_list.append(JobAd(
                         self.jobid,
                         self.position,
@@ -279,7 +280,7 @@ def fetch_mingpao(page_no):
 
     # print html.decode("big5", 'ignore').encode('utf-8', 'ignore')
 
-    return parser.get_job_ad_list()
+    return parser.get_job_ad_list(), parser.end
 
 class JobDetailParser(BaseHTMLParser):
     ignore_line_list = [
@@ -346,7 +347,8 @@ def gen_daily_job():
     now = datetime.datetime.now()
     filename = now.strftime("%Y%m%d") + ".html"
     daily_job_html = "static/" + filename
-    file = open(daily_job_html, "w+")
+    daily_job_html_tmp = daily_job_html + ".tmp"
+    file = open(daily_job_html_tmp, "w+")
 
     print "Start generating output html: " + daily_job_html
 
@@ -356,23 +358,24 @@ def gen_daily_job():
     while True:
         print 'fetching mingpao page_no ', page_no
 
-        try:
-            result = fetch_mingpao(page_no)
-            # print len(result)
-            if len(result) == 0:
-                break
-            job_ad_list.extend(result)
-            page_no += 1
-        except EOFError:
+        # try:
+        result, end = fetch_mingpao(page_no)
+        job_ad_list.extend(result)
+        if len(result) == 0 or end:
             break
+        page_no += 1
+        # except EOFError:
+        #     break
 
     # fetch job details
     total = len(job_ad_list)
-    count = 0    
+    count = 0
+    print "fetching %d jobs details" % total
+
     for job_ad in job_ad_list:
         count += 1
         print 'fetching job detail ' + (str(count) + "/" + str(total))
-        content = fetch_job_detail(job_ad.get_url())        
+        content = fetch_job_detail(job_ad.get_url())
         job_ad.content = content
         pass
     # exit()
@@ -438,8 +441,11 @@ def gen_daily_job():
     '''
     )
 
-    file.close() 
+    file.close()
 
+    # move tmp to real
+    os.rename(daily_job_html_tmp, daily_job_html)
+    
     index_html = "static/index.html"
     if os.path.isfile(index_html):
         os.remove(index_html)
